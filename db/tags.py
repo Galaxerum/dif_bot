@@ -3,10 +3,19 @@ from db.db import DB_PATH
 from typing import List
 
 
-async def add_tags(user_id: int, tags: List[str]):
+async def add_tags(user_id: int, tag: str):
     async with aiosqlite.connect(DB_PATH) as db:
-        for tag in tags:
+        # Проверка, существует ли уже строка с этим user_id
+        cursor = await db.execute("SELECT tag FROM tags WHERE user_id = ?", (user_id,))
+        row = await cursor.fetchone()
+
+        if row is None:
+            # Если строки нет — вставляем новую
             await db.execute("INSERT INTO tags (user_id, tag) VALUES (?, ?)", (user_id, tag))
+        else:
+            # Если строка есть — обновляем поле tag
+            await db.execute("UPDATE tags SET tag = ? WHERE user_id = ?", (tag, user_id))
+
         await db.commit()
 
 

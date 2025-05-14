@@ -17,7 +17,7 @@ TABLES = {
     "tags": """
         CREATE TABLE IF NOT EXISTS tags (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
+            user_id INTEGER UNIQUE,
             tag TEXT
         );
     """,
