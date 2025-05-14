@@ -50,3 +50,12 @@ async def get_all_users() -> List[User]:
     except Exception as e:
         print(f"Error fetching all users: {e}")
         return []
+
+
+async def update_user_portfolio(user_id: int, portfolio: str):
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("UPDATE users SET portfolio = ? WHERE user_id = ?", (portfolio, user_id))
+            await db.commit()
+    except Exception as e:
+        print(f"Error updating user portfolio {user_id}: {e}")
