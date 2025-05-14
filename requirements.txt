@@ -1,0 +1,10 @@
+aiogram==2.25.2
+fastapi~=0.115.12
+uvicorn~=0.34.2
+jinja2
+aiofiles
+python-dotenv~=1.1.0
+aiosqlite~=0.21.0
+
+pydantic~=2.11.4
+aiohttp~=3.8.6
