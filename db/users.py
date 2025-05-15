@@ -32,6 +32,15 @@ async def get_user(user_id: int) -> Optional[User]:
         return None
 
 
+async def delete_user_portfolio(user_id: int):
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("UPDATE users SET portfolio = '' WHERE user_id = ?", (user_id,))
+            await db.commit()
+    except Exception as e:
+        print(f"Error deleting portfolio for user {user_id}: {e}")
+
+
 async def get_user_portfolio(user_id: int) -> Optional[User]:
     try:
         async with aiosqlite.connect(DB_PATH) as db:
@@ -42,6 +51,7 @@ async def get_user_portfolio(user_id: int) -> Optional[User]:
     except Exception as e:
         print(f"Error getting user {user_id}: {e}")
         return None
+
 
 async def update_user_team(user_id: int, team_id: int):
     try:
