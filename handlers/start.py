@@ -1,7 +1,8 @@
 from aiogram import types
 from aiogram.types import ParseMode
 from db.users import add_user
-from db.models import User  # Импортируем модель User
+from db.models import User
+from keyboards import reply_keyboard
 from aiogram import Dispatcher
 
 
@@ -18,7 +19,7 @@ async def start_handler(message: types.Message):
     greeting = (f"Привет, {message.from_user.first_name}!\nЯ бот, который поможет тебе составить команду по твоим "
                 f"навыкам. Просто отправь мне свое портфолио.")
 
-    await message.answer(greeting)
+    await message.answer(greeting, reply_markup=reply_keyboard.user_kb)
 
 
 def register_handlers(dp: Dispatcher):

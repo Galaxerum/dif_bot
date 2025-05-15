@@ -1,6 +1,6 @@
 import aiosqlite
 from db.db import DB_PATH
-from db.models import Team
+from db.models import Team, User
 from typing import List, Optional
 
 

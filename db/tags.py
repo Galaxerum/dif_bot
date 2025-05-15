@@ -1,22 +1,23 @@
 import aiosqlite
 from db.db import DB_PATH
 from typing import List
+import json
 
 
-async def add_tags(user_id: int, tag: str):
+async def add_tags(user_id: int, tags: list[str]):
+    tags_str = json.dumps(tags, ensure_ascii=False)  # Преобразуем список тегов в JSON-строку
+
     async with aiosqlite.connect(DB_PATH) as db:
-        # Проверка, существует ли уже строка с этим user_id
         cursor = await db.execute("SELECT tag FROM tags WHERE user_id = ?", (user_id,))
         row = await cursor.fetchone()
 
         if row is None:
-            # Если строки нет — вставляем новую
-            await db.execute("INSERT INTO tags (user_id, tag) VALUES (?, ?)", (user_id, tag))
+            await db.execute("INSERT INTO tags (user_id, tag) VALUES (?, ?)", (user_id, tags_str))
         else:
-            # Если строка есть — обновляем поле tag
-            await db.execute("UPDATE tags SET tag = ? WHERE user_id = ?", (tag, user_id))
+            await db.execute("UPDATE tags SET tag = ? WHERE user_id = ?", (tags_str, user_id))
 
         await db.commit()
+
 
 
 async def get_all_tags() -> List[str]:
