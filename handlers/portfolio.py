@@ -1,3 +1,5 @@
+from typing import TextIO
+
 from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
@@ -122,6 +124,10 @@ async def process_portfolio_text(message: types.Message, state: FSMContext):
     if not user:
         await message.answer("Пожалуйста, сначала зарегистрируйтесь с помощью команды /start.")
         await state.finish()
+        return
+
+    if len(portfolio_text) >= 1024:
+        await message.answer("Сообщение слишком длинное")
         return
 
     current_state = await state.get_state()
