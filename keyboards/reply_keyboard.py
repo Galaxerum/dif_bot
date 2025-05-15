@@ -1,6 +1,5 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-# Стартовая клавиатура (показывается при первом запуске бота)
 start_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="➕ Создать портфолио")]

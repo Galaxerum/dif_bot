@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from aiogram import types
 from app.config import bot, dp, WEBHOOK_URL, WEBHOOK_PATH
+from aiogram import Dispatcher
 
 
 @asynccontextmanager

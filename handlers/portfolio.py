@@ -4,7 +4,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types import ReplyKeyboardRemove
 from db.users import get_user, update_user_portfolio, get_user_portfolio, delete_user_portfolio
 from db.tags import add_tags, get_user_tags
-from services.gemini_api import generate_text
+from services.deepseek_api import generate_text
 import asyncio
 from keyboards import reply_keyboard
 import json
@@ -52,8 +52,8 @@ async def show_typing(chat_id, bot):
         await asyncio.sleep(3)
 
 
-async def start_portfolio_processing(message: types.Message):
-    await PortfolioProcessing.waiting_for_portfolio.set()
+async def start_portfolio_processing(message: types.Message, state: FSMContext):
+    await state.set_state(PortfolioProcessing.waiting_for_portfolio)
     await message.answer(
         "📝 Отправьте текст вашего портфолио.\n"
         "(Чтобы отменить, используйте /cancel)",
@@ -91,7 +91,7 @@ async def back_to_main_menu(message: types.Message, state: FSMContext):
     )
 
 
-async def edit_portfolio(message: types.Message):
+async def edit_portfolio(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     portfolio = await get_user_portfolio(user_id)
 
@@ -103,7 +103,7 @@ async def edit_portfolio(message: types.Message):
         )
         return
 
-    await PortfolioProcessing.editing.set()
+    await state.set_state(PortfolioProcessing.editing)
     await message.answer(
         "✏️ Отправьте новый текст портфолио для обновления.\n"
         "(Чтобы отменить, используйте /cancel)",
@@ -111,11 +111,14 @@ async def edit_portfolio(message: types.Message):
     )
 
 
+USE_AI = False
+
+
 async def process_portfolio_text(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     portfolio_text = message.text.strip()
-
     user = await get_user(user_id)
+
     if not user:
         await message.answer("Пожалуйста, сначала зарегистрируйтесь с помощью команды /start.")
         await state.finish()
@@ -127,45 +130,23 @@ async def process_portfolio_text(message: types.Message, state: FSMContext):
     try:
         processing_msg = await message.answer("⏳ Сохраняю ваше портфолио...")
 
-        # Сохраняем текст портфолио
-        if current_state == PortfolioProcessing.editing.state:
-            await update_user_portfolio(user_id, portfolio_text)
-        else:
-            await update_user_portfolio(user_id, portfolio_text)
+        tags = []
+        is_meaningful = True
 
-        # Генерация тегов (только для внутренней логики, не показывается пользователю)
-        with open("prompts.json", "r", encoding="utf-8") as f:
-            prompts = json.load(f)
+        if USE_AI:
+            tags, is_meaningful = await _process_portfolio_with_ai(portfolio_text)
+            if not is_meaningful or not tags:
+                await message.answer(
+                    "❌ Ваше портфолио не содержит достаточно сведений.\n"
+                    "Пожалуйста, отправьте более подробный и содержательный текст."
+                )
+                return
 
-        known_tags = load_known_tags()
-        known_tags_str = ", ".join(known_tags)
+            update_known_tags(tags)
+            await add_tags(user_id, tags)
+            print(f"Tags for user {user_id}: {tags}")
 
-        prompt = f"{prompts['generate_tags']}Известные теги: {known_tags_str}\n\nВот портфолио:\n{portfolio_text}"
-
-        response_text = await generate_text(prompt)
-
-        try:
-            parsed = json.loads(response_text)
-            tags = parsed.get("tags", [])
-            is_meaningful = parsed.get("mean", ["False"])[0] == "True"
-        except Exception as e:
-            print(f"JSON parsing error: {e}")
-            await message.answer("⚠️ Не удалось обработать ваш текст. Попробуйте ещё раз.")
-            await state.finish()
-            return
-
-        if not is_meaningful or not tags:
-            await message.answer(
-                "❌ Ваше портфолио не содержит достаточно сведений.\n"
-                "Пожалуйста, отправьте более подробный и содержательный текст."
-            )
-            return
-
-        # Логируем теги в консоль, но не показываем пользователю
-        print(f"Tags for user {user_id}: {tags}")
-
-        update_known_tags(tags)
-        await add_tags(user_id, tags)
+        await update_user_portfolio(user_id, portfolio_text)
 
         if current_state == PortfolioProcessing.editing.state:
             await processing_msg.edit_text("✅ Портфолио обновлено.")
@@ -198,6 +179,28 @@ async def process_portfolio_text(message: types.Message, state: FSMContext):
         await state.finish()
     finally:
         typing_task.cancel()
+
+
+async def _process_portfolio_with_ai(portfolio_text: str) -> tuple[list[str], bool]:
+    try:
+        with open("prompts.json", "r", encoding="utf-8") as f:
+            prompts = json.load(f)
+
+        known_tags = load_known_tags()
+        known_tags_str = ", ".join(known_tags)
+        prompt = f"{prompts['generate_tags']}Известные теги: {known_tags_str}\n\nВот портфолио:\n{portfolio_text}"
+
+        response_text = await generate_text(prompt)
+        parsed = json.loads(response_text)
+
+        tags = parsed.get("tags", [])
+        is_meaningful = parsed.get("mean", ["False"])[0] == "True"
+
+        return tags, is_meaningful
+
+    except Exception as e:
+        print(f"JSON parsing error: {e}")
+        return [], False
 
 
 async def confirm_tags_save(message: types.Message, state: FSMContext):
@@ -239,7 +242,7 @@ async def cancel_portfolio_processing(message: types.Message, state: FSMContext)
     )
 
 
-async def ask_delete_portfolio(message: types.Message):
+async def ask_delete_portfolio(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     portfolio = await get_user_portfolio(user_id)
     if not portfolio:
@@ -249,7 +252,7 @@ async def ask_delete_portfolio(message: types.Message):
         )
         return
 
-    await PortfolioDelete.waiting_for_confirmation.set()
+    await state.set_state(PortfolioDelete.waiting_for_confirmation)
 
     await message.answer(
         "❗ Вы уверены, что хотите удалить портфолио?\n"
@@ -288,7 +291,8 @@ def register_handlers(dp: Dispatcher):
     # Обработчики команд
     dp.register_message_handler(
         start_portfolio_processing,
-        text="➕ Создать портфолио"
+        text="➕ Создать портфолио",
+        state="*"
     )
     dp.register_message_handler(
         show_portfolio,
@@ -297,6 +301,7 @@ def register_handlers(dp: Dispatcher):
     dp.register_message_handler(
         edit_portfolio,
         text="✏️ Редактировать портфолио",
+        state="*"
     )
     dp.register_message_handler(
         back_to_main_menu,
@@ -322,7 +327,8 @@ def register_handlers(dp: Dispatcher):
     )
     dp.register_message_handler(
         ask_delete_portfolio,
-        text="❌ Удалить портфолио"
+        text="❌ Удалить портфолио",
+        state="*"
     )
     dp.register_message_handler(
         confirm_delete_portfolio,
