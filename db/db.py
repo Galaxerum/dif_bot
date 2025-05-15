@@ -1,8 +1,7 @@
 import aiosqlite
-import asyncio
 from pathlib import Path
 
-DB_PATH = Path("main.db")  # или получай путь через config.py
+DB_PATH = Path("main.db")
 
 TABLES = {
     "users": """
@@ -11,7 +10,8 @@ TABLES = {
             user_id INTEGER UNIQUE,
             username TEXT,
             portfolio TEXT,
-            team_id INTEGER
+            team_id INTEGER,
+            relevance
         );
     """,
     "tags": """
