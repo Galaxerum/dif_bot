@@ -17,8 +17,8 @@ async def generate_teams(message: types.Message):
     try:
         # 1. Создаем и распределяем команды
         with TeamDistributor() as distributor:
-            distributor.setup_colors(["red", "blue", "green", "yellow", "purple"])
-            distributor.distribute_users(max_team_size=10)
+            distributor.setup_colors(["red"])
+            distributor.distribute_users(max_team_size=2)
 
         # 2. Рассылаем информацию участникам
         await send_team_notifications(message.bot)
@@ -95,6 +95,7 @@ async def team_info(message: types.Message):
         """, (user_id,))
 
         team = cursor.fetchone()
+        print(team)
 
         if not team:
             await message.answer("Вы пока не состоите ни в одной команде.")
