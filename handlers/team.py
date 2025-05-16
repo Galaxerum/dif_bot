@@ -17,7 +17,7 @@ async def generate_teams(message: types.Message):
     try:
         # 1. Создаем и распределяем команды
         with TeamDistributor() as distributor:
-            distributor.setup_colors(["red"])
+            distributor.setup_colors(["red", "pppp"])
             distributor.distribute_users(max_team_size=2)
 
         # 2. Рассылаем информацию участникам
