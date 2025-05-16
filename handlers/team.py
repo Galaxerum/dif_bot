@@ -1,31 +1,120 @@
 from aiogram import types
 from aiogram.types import ParseMode
-from db.users import get_user
-from db.teams import get_team_by_user_id
 from aiogram import Dispatcher
+from db.teams import TeamDistributor
+from db.admin import get_admin_user_ids
+import sqlite3
 
 
-async def team_handler(message: types.Message):
+async def generate_teams(message: types.Message):
+    # Проверка прав администратора
+    user_id = message.from_user.id
+    admin_ids = await get_admin_user_ids()
+
+    if user_id not in admin_ids:
+        return
+
+    try:
+        # 1. Создаем и распределяем команды
+        with TeamDistributor() as distributor:
+            distributor.setup_colors(["red", "blue", "green", "yellow", "purple"])
+            distributor.distribute_users(max_team_size=10)
+
+        # 2. Рассылаем информацию участникам
+        await send_team_notifications(message.bot)
+
+        await message.answer("✅ Команды успешно сформированы и уведомления разосланы!")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка при формировании команд: {str(e)}")
+
+
+async def send_team_notifications(bot):
+    conn = sqlite3.connect("main.db")
+    conn.row_factory = sqlite3.Row
+
+    try:
+        # Получаем все команды с участниками
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT t.id, t.colors, 
+                   GROUP_CONCAT(u.user_id) as user_ids,
+                   GROUP_CONCAT(u.username) as usernames
+            FROM teams t
+            JOIN users u ON t.id = u.team_id
+            WHERE u.relevance = 1
+            GROUP BY t.id
+        """)
+
+        for team in cursor.fetchall():
+            team_id = team["id"]
+            color = team["colors"]
+            user_ids = team["user_ids"].split(",") if team["user_ids"] else []
+            usernames = team["usernames"].split(",") if team["usernames"] else []
+
+            members_list = "\n".join(
+                [f"- @{username}" for username in usernames if username]
+            )
+
+            message_text = (
+                f"🎉 Ваша команда сформирована!\n\n"
+                f"🔹 Номер команды: {team_id}\n"
+                f"🎨 Цвет команды: {color}\n\n"
+                f"👥 Состав команды:\n{members_list}"
+            )
+
+            # Отправляем каждому участнику
+            for user_id in user_ids:
+                try:
+                    await bot.send_message(
+                        chat_id=int(user_id),
+                        text=message_text,
+                        parse_mode=ParseMode.HTML
+                    )
+                except Exception as e:
+                    print(f"Не удалось отправить сообщение пользователю {user_id}: {e}")
+    finally:
+        conn.close()
+
+
+async def team_info(message: types.Message):
     user_id = message.from_user.id
 
-    # Получаем пользователя из базы данных
-    user = await get_user(user_id)
-    if not user:
-        await message.answer("Пожалуйста, сначала зарегистрируйтесь с помощью команды /start.")
-        return
+    conn = sqlite3.connect("main.db")
+    conn.row_factory = sqlite3.Row
 
-    # Получаем команду пользователя
-    team = await get_team_by_user_id(user.team_id)
-    if not team:
-        await message.answer("Вы еще не состоите в команде.")
-        return
+    try:
+        # Получаем информацию о команде пользователя
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT t.id as team_id, t.colors, 
+                   GROUP_CONCAT(u.username) as members
+            FROM users u
+            JOIN teams t ON u.team_id = t.id
+            WHERE u.user_id = ? AND u.relevance = 1
+            GROUP BY t.id
+        """, (user_id,))
 
-    # Формируем сообщение с данными о команде
-    team_info = f"Вы в команде: {team.name}\n" + "\n".join([f"{member.username}" for member in team.members])
+        team = cursor.fetchone()
 
-    # Отправляем информацию о команде
-    await message.answer(team_info, parse_mode=ParseMode.MARKDOWN)
+        if not team:
+            await message.answer("Вы пока не состоите ни в одной команде.")
+            return
+
+        # Формируем сообщение
+        members = team["members"].split(",") if team["members"] else []
+        members_list = "\n".join([f"- @{m}" for m in members if m])
+
+        response = (
+            f"🔹 Ваша команда: №{team['team_id']}\n"
+            f"🎨 Цвет: {team['colors']}\n\n"
+            f"👥 Участники:\n{members_list}"
+        )
+
+        await message.answer(response, parse_mode=ParseMode.HTML)
+    finally:
+        conn.close()
 
 
 def register_handlers(dp: Dispatcher):
-    dp.register_message_handler(team_handler, commands=["team"])
+    dp.register_message_handler(generate_teams, commands=["generate_teams"])
+    dp.register_message_handler(team_info, text="👥 Моя команда")

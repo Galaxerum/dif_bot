@@ -96,7 +96,6 @@ async def get_relevant_users_without_tags():
             SELECT u.id, u.user_id, u.username, u.portfolio, u.team_id 
             FROM users u
             LEFT JOIN tags t ON u.user_id = t.user_id
-            WHERE u.relevance = 1 
-            AND (t.user_id IS NULL OR json_array_length(t.tag) = 0)
+            WHERE t.user_id IS NULL OR json_array_length(t.tag) = 0
         """)
         return await cursor.fetchall() or []

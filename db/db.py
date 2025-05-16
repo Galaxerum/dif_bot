@@ -24,7 +24,7 @@ TABLES = {
     "teams": """
         CREATE TABLE IF NOT EXISTS teams (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
+            colors TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );   
     """,

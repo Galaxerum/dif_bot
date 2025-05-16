@@ -6,7 +6,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types import ReplyKeyboardRemove
 from db.users import get_user, update_user_portfolio, get_user_portfolio, delete_user_portfolio
 from db.tags import add_tags, get_user_tags
-from services.deepseek_api import generate_text
+from services.gemini_api import generate_text
 import asyncio
 from keyboards import reply_keyboard
 import json
@@ -113,7 +113,7 @@ async def edit_portfolio(message: types.Message, state: FSMContext):
     )
 
 
-USE_AI = False
+USE_AI = True
 
 
 async def process_portfolio_text(message: types.Message, state: FSMContext):
