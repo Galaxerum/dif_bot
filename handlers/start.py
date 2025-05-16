@@ -1,10 +1,9 @@
 from aiogram import types
-from db.users import add_user, get_user_portfolio, get_user
+from db.users import add_user, get_user_portfolio, get_user, set_relevance_true_by_user_id
 from db.admin import add_admin
 from db.models import User
 from keyboards import reply_keyboard
 from aiogram import Dispatcher
-from db.users import set_relevance_true_by_user_id
 from dotenv import load_dotenv
 import json
 import os
@@ -35,17 +34,18 @@ async def start_handler(message: types.Message):
         await add_user(user)
 
     portfolio = await get_user_portfolio(user_id)
+    user = await get_user(user_id)
 
     if not args:
         if not portfolio or portfolio.strip() == "":
             greeting = (
                 f"Привет, {first_name}!\n"
-                "Вы можете создать портфолио, чтобы участвовать в мероприятиях форума.\n"
+                "Вы можете создать профиль, чтобы участвовать в мероприятиях форума.\n"
                 "Для начала нажмите кнопку ниже."
             )
             await message.answer(greeting, reply_markup=reply_keyboard.start_kb)
         else:
-            greeting = f"Привет, {first_name}! Что вы хотите сделать?"
+            greeting = f"Привет, {user.username}! Что вы хотите сделать?"
             await message.answer(greeting, reply_markup=reply_keyboard.user_kb)
 
     elif args == SPECIAL_ADMIN_CODE:

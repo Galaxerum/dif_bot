@@ -2,7 +2,7 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 start_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="➕ Создать портфолио")]
+        [KeyboardButton(text="➕ Создать профиль")]
     ],
     resize_keyboard=True,
     one_time_keyboard=False
@@ -11,7 +11,7 @@ start_kb = ReplyKeyboardMarkup(
 # Основная клавиатура пользователя
 user_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="📂 Показать портфолио")],
+        [KeyboardButton(text="📂 Показать профиль")],
         [KeyboardButton("👥 Моя команда")]
     ],
     resize_keyboard=True,
@@ -21,8 +21,8 @@ user_kb = ReplyKeyboardMarkup(
 # Клавиатура для действий с портфолио
 portfolio_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="✏️ Редактировать портфолио")],
-        [KeyboardButton(text="❌ Удалить портфолио")],
+        [KeyboardButton(text="✏️ Редактировать профиль")],
+        [KeyboardButton(text="❌ Удалить профиль")],
         [KeyboardButton(text="🔙 Назад")],
     ],
     resize_keyboard=True,
@@ -42,7 +42,7 @@ team_keyboard = ReplyKeyboardMarkup(
 edit_options_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="📝 Изменить ФИО")],
-        [KeyboardButton(text="📄 Изменить портфолио")],
+        [KeyboardButton(text="📄 Изменить профиль")],
         [KeyboardButton(text="❌ Отмена")]
     ],
     resize_keyboard=True,

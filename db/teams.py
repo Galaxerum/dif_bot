@@ -84,51 +84,74 @@ class TeamDistributor:
     def distribute_users(self, max_team_size: int = 10):
         users = self.get_users_to_distribute()
         teams = self.get_team_stats()
+
+        # Если нет команд, создаем их согласно color_limits
         if not teams:
-            raise ValueError("Нет доступных команд. Сначала вызовите setup_colors()")
+            with self.conn:
+                for color, limit in self.color_limits.items():
+                    for _ in range(limit):
+                        self.conn.execute("INSERT INTO teams (colors) VALUES (?)", (color,))
+            teams = self.get_team_stats()
+
+        # Создаем временную структуру для отслеживания тегов команд
+        team_tags = {team["id"]: set(self.get_team_tags(team["id"])) for team in teams}
 
         for user in users:
             user_tags = set(user["tags"])
-            teams = self.get_team_stats()  # обновляем актуальные данные по командам
+            username = user.get("username", "")
 
             # Ищем команду с местом и без пересечения тегов
-            suitable_team = None
+            found_team = None
             for team in teams:
                 if team["members"] >= max_team_size:
                     continue
-                team_tags = self.get_team_tags(team["id"])
-                if team_tags.isdisjoint(user_tags):
-                    suitable_team = team
+                if team_tags[team["id"]].isdisjoint(user_tags):
+                    found_team = team
                     break
 
-            if suitable_team is None:
-                # Нет команды без пересечений — ищем команду с минимальным участием
-                suitable_team = min(teams, key=lambda x: x["members"])
+            # Если не нашли подходящую, берем команду с минимальным количеством участников
+            if not found_team:
+                found_team = min(teams, key=lambda x: x["members"])
 
                 # Если команда переполнена, пытаемся создать новую того же цвета
-                if suitable_team["members"] >= max_team_size:
-                    color = suitable_team["color"]
+                if found_team["members"] >= max_team_size:
+                    color = found_team["color"]
                     current_count = self.get_color_team_count(color)
                     limit = self.color_limits.get(color, 0)
+
                     if current_count < limit:
                         with self.conn:
                             self.conn.execute("INSERT INTO teams (colors) VALUES (?)", (color,))
                             new_team_id = self.conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                        suitable_team = {
-                            "id": new_team_id,
-                            "color": color,
-                            "members": 0
-                        }
-                    else:
-                        # Если лимит достигнут, оставляем пользователя в самой маленькой команде
-                        pass
 
+                        # Обновляем структуры данных
+                        new_team = {"id": new_team_id, "color": color, "members": 0}
+                        teams.append(new_team)
+                        team_tags[new_team_id] = set()
+                        found_team = new_team
+
+            # Проверяем реальное пересечение тегов
+            actual_conflict = not team_tags[found_team["id"]].isdisjoint(user_tags)
+
+            # Обновляем данные пользователя
             with self.conn:
                 self.conn.execute(
                     "UPDATE users SET team_id = ? WHERE user_id = ?",
-                    (suitable_team["id"], user["user_id"])
+                    (found_team["id"], user["user_id"])
                 )
-            print(f"User {user['user_id']} assigned to team {suitable_team['id']} (color: {suitable_team['color']})")
+
+            # Обновляем теги команды
+            team_tags[found_team["id"]].update(user_tags)
+            found_team["members"] += 1
+
+            # Форматируем вывод
+            tags_str = str(list(user_tags)).replace("'", "")
+            if actual_conflict:
+                print(
+                    f"{user['user_id']} | {username} | {tags_str} | ⚠️ добавлен в команду с пересечениями #{found_team['id']} ({found_team['color']})")
+            else:
+                print(
+                    f"{user['user_id']} | {username} | {tags_str} | команда #{found_team['id']} ({found_team['color']})")
 
     def clear_all_teams(self):
         """Удаляет все команды и обнуляет team_id у всех пользователей"""

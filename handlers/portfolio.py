@@ -65,9 +65,20 @@ async def process_username(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     await update_user_username(user_id, username)
     await state.set_state(PortfolioProcessing.waiting_for_portfolio)
+
+    portfolio_instructions = (
+        "<b>Введите информацию о вашем профессиональном профиле:</b>\n\n"
+        "1. Основная специализация и сфера деятельности\n"
+        "2. Наиболее значимые достижения и результаты\n"
+        "3. Уникальные навыки и особенности\n\n"
+        "<i>Рекомендации:</i>\n"
+        "• Конкретика в описании\n"
+        "• Объем 1-3 предложения"
+    )
+
     await message.answer(
-        "Теперь отправьте текст вашего портфолио.\n"
-        "(Чтобы отменить, используйте /cancel)"
+        portfolio_instructions,
+        parse_mode="HTML"
     )
 
 async def back_to_main_menu(message: types.Message, state: FSMContext):
@@ -79,8 +90,8 @@ async def back_to_main_menu(message: types.Message, state: FSMContext):
 
 async def process_new_username(message: types.Message, state: FSMContext):
     new_username = message.text.strip()
-    if len(new_username) < 3:
-        await message.answer("Пожалуйста, введите корректное ФИО (минимум 3 символа).")
+    if 3 > len(new_username) > 128:
+        await message.answer("Пожалуйста, введите корректное ФИО.")
         return
     user_id = message.from_user.id
     await update_user_username(user_id, new_username)
@@ -107,7 +118,7 @@ async def process_portfolio_text(message: types.Message, state: FSMContext):
     typing_task = asyncio.create_task(show_typing(message.chat.id, message.bot))
 
     try:
-        processing_msg = await message.answer("⏳ Сохраняю ваше портфолио...")
+        processing_msg = await message.answer("⏳ Сохраняю ваш профиль...")
 
         tags = []
         is_meaningful = True
@@ -116,7 +127,7 @@ async def process_portfolio_text(message: types.Message, state: FSMContext):
             tags, is_meaningful = await _process_portfolio_with_ai(portfolio_text)
             if not is_meaningful or not tags:
                 await message.answer(
-                    "❌ Ваше портфолио не содержит достаточно сведений.\n"
+                    "❌ Ваш профиль не содержит достаточно сведений.\n"
                     "Пожалуйста, отправьте более подробный и содержательный текст."
                 )
                 return
@@ -129,13 +140,13 @@ async def process_portfolio_text(message: types.Message, state: FSMContext):
 
         if current_state in [PortfolioProcessing.editing.state,
                            PortfolioProcessing.waiting_for_new_portfolio.state]:
-            await processing_msg.edit_text("✅ Портфолио обновлено.")
+            await processing_msg.edit_text("✅ Профиль обновлено.")
             await message.answer("✅ Обновление успешно завершено.", reply_markup=reply_keyboard.portfolio_kb)
             await state.finish()
             return
 
         await processing_msg.edit_text(
-            f"📂 Ваше портфолио:\n\n{portfolio_text}\n\nЧто вы хотите сделать?"
+            f"📂 Ваш профиль:\n\n{portfolio_text}\n\nЧто вы хотите сделать?"
         )
 
         async with state.proxy() as data:
@@ -144,7 +155,7 @@ async def process_portfolio_text(message: types.Message, state: FSMContext):
 
         await PortfolioProcessing.confirm_tags.set()
         await message.answer(
-            "Сохранить это портфолио?",
+            "Сохранить этот профиль?",
             reply_markup=types.ReplyKeyboardMarkup(
                 keyboard=[
                     [types.KeyboardButton(text="✅ Да, сохранить")],
@@ -192,7 +203,7 @@ async def confirm_tags_save(message: types.Message, state: FSMContext):
         await add_tags(user_id, tags)
 
         await message.answer(
-            "✅ Ваше портфолио успешно сохранено!",
+            "✅ Ваш профиль успешно сохранен!",
             reply_markup=reply_keyboard.user_kb
         )
     else:
@@ -223,7 +234,7 @@ async def ask_delete_portfolio(message: types.Message, state: FSMContext):
     portfolio = await get_user_portfolio(user_id)
     if not portfolio:
         await message.answer(
-            "❌ У вас нет портфолио для удаления.",
+            "❌ У вас нет профиля для удаления.",
             reply_markup=reply_keyboard.user_kb
         )
         return
@@ -231,7 +242,7 @@ async def ask_delete_portfolio(message: types.Message, state: FSMContext):
     await state.set_state(PortfolioDelete.waiting_for_confirmation)
 
     await message.answer(
-        "❗ Вы уверены, что хотите удалить портфолио?\n"
+        "❗ Вы уверены, что хотите удалить профиль?\n"
         "Это действие необратимо.\n\n"
         "Пожалуйста, подтвердите:",
         reply_markup=types.ReplyKeyboardMarkup(
@@ -250,12 +261,12 @@ async def confirm_delete_portfolio(message: types.Message, state: FSMContext):
         await add_tags(user_id, [])  # Очищаем теги
 
         await message.answer(
-            "🗑 Ваше портфолио было удалено.",
+            "🗑 Ваше профиль был удален.",
             reply_markup=reply_keyboard.start_kb
         )
     else:
         await message.answer(
-            "✅ Удаление отменено. Портфолио осталось без изменений.",
+            "✅ Удаление отменено. Профиль остался без изменений.",
             reply_markup=reply_keyboard.portfolio_kb
         )
 
@@ -267,8 +278,8 @@ async def edit_portfolio(message: types.Message, state: FSMContext):
 
     if not portfolio:
         await message.answer(
-            "❌ У вас ещё нет сохранённого портфолио.\n"
-            "Нажмите '➕ Создать портфолио' чтобы создать его.",
+            "❌ У вас ещё нет сохранённого профиля.\n"
+            "Нажмите '➕ Создать профиль' чтобы создать его.",
             reply_markup=reply_keyboard.start_kb
         )
         return
@@ -286,10 +297,10 @@ async def choose_edit_handler(message: types.Message, state: FSMContext):
             "Пожалуйста, введите новое ФИО:",
             reply_markup=ReplyKeyboardRemove()
         )
-    elif message.text == "📄 Изменить портфолио":
+    elif message.text == "📄 Изменить профиль":
         await PortfolioProcessing.waiting_for_new_portfolio.set()
         await message.answer(
-            "✏️ Отправьте новый текст портфолио для обновления.\n"
+            "✏️ Отправьте новый текст профиля для обновления.\n"
             "(Чтобы отменить, используйте /cancel)",
             reply_markup=ReplyKeyboardRemove()
         )
@@ -316,8 +327,8 @@ async def show_portfolio(message: types.Message):
 
     if not portfolio:
         await message.answer(
-            "❌ У вас ещё нет сохранённого портфолио.\n"
-            "Нажмите '➕ Создать портфолио' чтобы создать его.",
+            "❌ У вас ещё нет сохранённого профиля.\n"
+            "Нажмите '➕ Создать профиль' чтобы создать его.",
             reply_markup=reply_keyboard.start_kb
         )
         return
@@ -325,7 +336,7 @@ async def show_portfolio(message: types.Message):
     # Формируем сообщение с ФИО и портфолио
     portfolio_message = (
         f"👤 <b>Пользователь:</b> {username}\n\n"
-        f"📂 <b>Портфолио:</b>\n{portfolio}\n\n"
+        f"📂 <b>Профиль:</b>\n{portfolio}\n\n"
         "Выберите действие:"
     )
 
@@ -340,16 +351,16 @@ def register_handlers(dp: Dispatcher):
     # Обработчики команд
     dp.register_message_handler(
         start_portfolio_processing,
-        text="➕ Создать портфолио",
+        text="➕ Создать профиль",
         state="*"
     )
     dp.register_message_handler(
         show_portfolio,
-        text="📂 Показать портфолио",
+        text="📂 Показать профиль",
     )
     dp.register_message_handler(
         edit_portfolio,
-        text="✏️ Редактировать портфолио",
+        text="✏️ Редактировать профиль",
         state="*"
     )
     dp.register_message_handler(
@@ -393,7 +404,7 @@ def register_handlers(dp: Dispatcher):
     )
     dp.register_message_handler(
         ask_delete_portfolio,
-        text="❌ Удалить портфолио",
+        text="❌ Удалить профиль",
         state="*"
     )
     dp.register_message_handler(
