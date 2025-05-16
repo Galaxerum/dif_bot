@@ -15,10 +15,14 @@ async def generate_teams(message: types.Message):
         return
 
     try:
-        # 1. Создаем и распределяем команды
         with TeamDistributor() as distributor:
-            distributor.setup_colors(["red", "pppp"])
-            distributor.distribute_users(max_team_size=2)
+            distributor.setup_colors({
+                "Розовые": 5,
+                "Желтые": 18,
+                "Зеленые": 1,
+                "Белые": 9,
+            })
+            distributor.distribute_users(max_team_size=10)
 
         # 2. Рассылаем информацию участникам
         await send_team_notifications(message.bot)
@@ -115,7 +119,19 @@ async def team_info(message: types.Message):
     finally:
         conn.close()
 
+async def clear_teams(message: types.Message):
+    user_id = message.from_user.id
+    admin_ids = await get_admin_user_ids()
+
+    if user_id not in admin_ids:
+        return
+
+    with TeamDistributor() as distributor:
+        distributor.clear_all_teams()
+    await message.answer("✅ Команды успешно очищены!")
+
 
 def register_handlers(dp: Dispatcher):
     dp.register_message_handler(generate_teams, commands=["generate_teams"])
+    dp.register_message_handler(clear_teams, commands=["clear_teams"])
     dp.register_message_handler(team_info, text="👥 Моя команда")

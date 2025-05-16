@@ -4,6 +4,12 @@ from db.models import User
 from typing import Optional, List
 
 
+async def update_user_username(user_id: int, username: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET username = ? WHERE user_id = ?", (username, user_id))
+        await db.commit()
+
+
 async def add_user(user: User):
     try:
         async with aiosqlite.connect(DB_PATH) as db:

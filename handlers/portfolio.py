@@ -1,10 +1,9 @@
 from typing import TextIO
-
 from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types import ReplyKeyboardRemove
-from db.users import get_user, update_user_portfolio, get_user_portfolio, delete_user_portfolio
+from db.users import get_user, update_user_portfolio, get_user_portfolio, delete_user_portfolio, update_user_username
 from db.tags import add_tags, get_user_tags
 from services.gemini_api import generate_text
 import asyncio
@@ -12,78 +11,64 @@ from keyboards import reply_keyboard
 import json
 import os
 
-
 def load_known_tags():
     if not os.path.exists("known_tags.json"):
         return []
     with open("known_tags.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
-
 def save_known_tags(tags: list[str]):
     with open("known_tags.json", "w", encoding="utf-8") as f:
         json.dump(sorted(set(tags)), f, ensure_ascii=False, indent=2)
-
 
 def update_known_tags(new_tags: list[str]):
     known = set(load_known_tags())
     updated = known.union(new_tags)
     save_known_tags(list(updated))
 
-
 def load_prompt(key: str, path="prompts.json") -> str:
     with open(path, "r", encoding="utf-8") as f:
         prompts = json.load(f)
     return prompts[key]
 
-
 class PortfolioProcessing(StatesGroup):
+    waiting_for_username = State()
     waiting_for_portfolio = State()
     processing = State()
     confirm_tags = State()
     editing = State()
-
+    choose_edit = State()
+    waiting_for_new_username = State()
+    waiting_for_new_portfolio = State()
 
 class PortfolioDelete(StatesGroup):
     waiting_for_confirmation = State()
-
 
 async def show_typing(chat_id, bot):
     while True:
         await bot.send_chat_action(chat_id, "typing")
         await asyncio.sleep(3)
 
-
 async def start_portfolio_processing(message: types.Message, state: FSMContext):
-    await state.set_state(PortfolioProcessing.waiting_for_portfolio)
+    await state.set_state(PortfolioProcessing.waiting_for_username)
     await message.answer(
-        "📝 Отправьте текст вашего портфолио.\n"
+        "📝 Пожалуйста, введите ваше ФИО для профиля.\n"
         "(Чтобы отменить, используйте /cancel)",
         reply_markup=ReplyKeyboardRemove()
     )
 
-
-async def show_portfolio(message: types.Message):
-    user_id = message.from_user.id
-    portfolio = await get_user_portfolio(user_id)
-
-    if not portfolio:
-        await message.answer(
-            "❌ У вас ещё нет сохранённого портфолио.\n"
-            "Нажмите '➕ Создать портфолио' чтобы создать его.",
-            reply_markup=reply_keyboard.start_kb
-        )
+async def process_username(message: types.Message, state: FSMContext):
+    username = message.text.strip()
+    if len(username) < 3:
+        await message.answer("Пожалуйста, введите корректное ФИО (минимум 3 символа).")
         return
-
-    # debug_tags = await get_user_tags(user_id)
-    # print(f"Debug: User {user_id} tags: {debug_tags}")  # Логируем теги в консоль
-
+    user_id = message.from_user.id
+    await update_user_username(user_id, username)
+    await state.set_state(PortfolioProcessing.waiting_for_portfolio)
     await message.answer(
-        f"📂 Ваше портфолио:\n\n{portfolio}\n\n"
-        "Что вы хотите сделать?",
-        reply_markup=reply_keyboard.portfolio_kb
+        "Теперь отправьте текст вашего портфолио.\n"
+        "(Чтобы отменить, используйте /cancel)"
     )
-
 
 async def back_to_main_menu(message: types.Message, state: FSMContext):
     await state.finish()
@@ -92,29 +77,17 @@ async def back_to_main_menu(message: types.Message, state: FSMContext):
         reply_markup=reply_keyboard.user_kb
     )
 
-
-async def edit_portfolio(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    portfolio = await get_user_portfolio(user_id)
-
-    if not portfolio:
-        await message.answer(
-            "❌ У вас ещё нет сохранённого портфолио.\n"
-            "Нажмите '➕ Создать портфолио' чтобы создать его.",
-            reply_markup=reply_keyboard.start_kb
-        )
+async def process_new_username(message: types.Message, state: FSMContext):
+    new_username = message.text.strip()
+    if len(new_username) < 3:
+        await message.answer("Пожалуйста, введите корректное ФИО (минимум 3 символа).")
         return
-
-    await state.set_state(PortfolioProcessing.editing)
-    await message.answer(
-        "✏️ Отправьте новый текст портфолио для обновления.\n"
-        "(Чтобы отменить, используйте /cancel)",
-        reply_markup=ReplyKeyboardRemove()
-    )
-
+    user_id = message.from_user.id
+    await update_user_username(user_id, new_username)
+    await message.answer("✅ ФИО успешно обновлено.", reply_markup=reply_keyboard.portfolio_kb)
+    await state.finish()
 
 USE_AI = True
-
 
 async def process_portfolio_text(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -154,7 +127,8 @@ async def process_portfolio_text(message: types.Message, state: FSMContext):
 
         await update_user_portfolio(user_id, portfolio_text)
 
-        if current_state == PortfolioProcessing.editing.state:
+        if current_state in [PortfolioProcessing.editing.state,
+                           PortfolioProcessing.waiting_for_new_portfolio.state]:
             await processing_msg.edit_text("✅ Портфолио обновлено.")
             await message.answer("✅ Обновление успешно завершено.", reply_markup=reply_keyboard.portfolio_kb)
             await state.finish()
@@ -186,7 +160,6 @@ async def process_portfolio_text(message: types.Message, state: FSMContext):
     finally:
         typing_task.cancel()
 
-
 async def _process_portfolio_with_ai(portfolio_text: str) -> tuple[list[str], bool]:
     try:
         with open("prompts.json", "r", encoding="utf-8") as f:
@@ -207,7 +180,6 @@ async def _process_portfolio_with_ai(portfolio_text: str) -> tuple[list[str], bo
     except Exception as e:
         print(f"JSON parsing error: {e}")
         return [], False
-
 
 async def confirm_tags_save(message: types.Message, state: FSMContext):
     if message.text == "✅ Да, сохранить":
@@ -231,7 +203,6 @@ async def confirm_tags_save(message: types.Message, state: FSMContext):
 
     await state.finish()
 
-
 async def cancel_portfolio_processing(message: types.Message, state: FSMContext):
     await state.finish()
     user_id = message.from_user.id
@@ -246,7 +217,6 @@ async def cancel_portfolio_processing(message: types.Message, state: FSMContext)
         "❌ Действие отменено.",
         reply_markup=keyboard
     )
-
 
 async def ask_delete_portfolio(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -273,7 +243,6 @@ async def ask_delete_portfolio(message: types.Message, state: FSMContext):
         )
     )
 
-
 async def confirm_delete_portfolio(message: types.Message, state: FSMContext):
     if message.text == "✅ Да, удалить":
         user_id = message.from_user.id
@@ -291,6 +260,80 @@ async def confirm_delete_portfolio(message: types.Message, state: FSMContext):
         )
 
     await state.finish()
+
+async def edit_portfolio(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    portfolio = await get_user_portfolio(user_id)
+
+    if not portfolio:
+        await message.answer(
+            "❌ У вас ещё нет сохранённого портфолио.\n"
+            "Нажмите '➕ Создать портфолио' чтобы создать его.",
+            reply_markup=reply_keyboard.start_kb
+        )
+        return
+
+    await state.set_state(PortfolioProcessing.choose_edit)
+    await message.answer(
+        "Что вы хотите изменить?",
+        reply_markup=reply_keyboard.edit_options_kb
+    )
+
+async def choose_edit_handler(message: types.Message, state: FSMContext):
+    if message.text == "📝 Изменить ФИО":
+        await PortfolioProcessing.waiting_for_new_username.set()
+        await message.answer(
+            "Пожалуйста, введите новое ФИО:",
+            reply_markup=ReplyKeyboardRemove()
+        )
+    elif message.text == "📄 Изменить портфолио":
+        await PortfolioProcessing.waiting_for_new_portfolio.set()
+        await message.answer(
+            "✏️ Отправьте новый текст портфолио для обновления.\n"
+            "(Чтобы отменить, используйте /cancel)",
+            reply_markup=ReplyKeyboardRemove()
+        )
+    elif message.text == "❌ Отмена":
+        await state.finish()
+        await message.answer(
+            "❌ Действие отменено.",
+            reply_markup=reply_keyboard.portfolio_kb
+        )
+    else:
+        await message.answer(
+            "Пожалуйста, выберите один из вариантов:",
+            reply_markup=reply_keyboard.edit_options_kb
+        )
+
+
+async def show_portfolio(message: types.Message):
+    user_id = message.from_user.id
+    portfolio = await get_user_portfolio(user_id)
+    user = await get_user(user_id)  # Получаем объект пользователя
+
+    # Получаем username через атрибут, а не через .get()
+    username = getattr(user, "username", "Не указано ФИО") if user else "Не указано ФИО"
+
+    if not portfolio:
+        await message.answer(
+            "❌ У вас ещё нет сохранённого портфолио.\n"
+            "Нажмите '➕ Создать портфолио' чтобы создать его.",
+            reply_markup=reply_keyboard.start_kb
+        )
+        return
+
+    # Формируем сообщение с ФИО и портфолио
+    portfolio_message = (
+        f"👤 <b>Пользователь:</b> {username}\n\n"
+        f"📂 <b>Портфолио:</b>\n{portfolio}\n\n"
+        "Выберите действие:"
+    )
+
+    await message.answer(
+        portfolio_message,
+        parse_mode="HTML",
+        reply_markup=reply_keyboard.portfolio_kb
+    )
 
 
 def register_handlers(dp: Dispatcher):
@@ -322,13 +365,30 @@ def register_handlers(dp: Dispatcher):
         state=PortfolioProcessing.all_states
     )
     dp.register_message_handler(
+        process_username,
+        state=PortfolioProcessing.waiting_for_username,
+        content_types=types.ContentType.TEXT
+    )
+    dp.register_message_handler(
         process_portfolio_text,
-        state=[PortfolioProcessing.waiting_for_portfolio, PortfolioProcessing.editing],
+        state=[PortfolioProcessing.waiting_for_portfolio,
+              PortfolioProcessing.editing,
+              PortfolioProcessing.waiting_for_new_portfolio],
         content_types=types.ContentType.TEXT
     )
     dp.register_message_handler(
         confirm_tags_save,
         state=PortfolioProcessing.confirm_tags,
+        content_types=types.ContentType.TEXT
+    )
+    dp.register_message_handler(
+        choose_edit_handler,
+        state=PortfolioProcessing.choose_edit,
+        content_types=types.ContentType.TEXT
+    )
+    dp.register_message_handler(
+        process_new_username,
+        state=PortfolioProcessing.waiting_for_new_username,
         content_types=types.ContentType.TEXT
     )
     dp.register_message_handler(

@@ -37,3 +37,14 @@ team_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True,  # Оптимизировать размер кнопки
     one_time_keyboard=True  # Скрыть клавиатуру после нажатия
 ).add(team_button)
+
+# Клавиатура для выбора, что редактировать
+edit_options_kb = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="📝 Изменить ФИО")],
+        [KeyboardButton(text="📄 Изменить портфолио")],
+        [KeyboardButton(text="❌ Отмена")]
+    ],
+    resize_keyboard=True,
+    one_time_keyboard=True
+)
