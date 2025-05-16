@@ -23,8 +23,10 @@ class TeamDistributor:
         self.color_limits = color_limits
         with self.conn:
             self.conn.execute("DELETE FROM teams")
-            for color in color_limits:
-                self.conn.execute("INSERT INTO teams (colors) VALUES (?)", (color,))
+            for color, limit in color_limits.items():
+                if limit > 0:  # Создаём команды только для цветов с положительным лимитом
+                    for _ in range(limit):
+                        self.conn.execute("INSERT INTO teams (colors) VALUES (?)", (color,))
 
     def get_users_to_distribute(self) -> List[Dict]:
         cur = self.conn.cursor()
@@ -85,22 +87,20 @@ class TeamDistributor:
         users = self.get_users_to_distribute()
         teams = self.get_team_stats()
 
-        # Если нет команд, создаем их согласно color_limits
         if not teams:
             with self.conn:
                 for color, limit in self.color_limits.items():
-                    for _ in range(limit):
-                        self.conn.execute("INSERT INTO teams (colors) VALUES (?)", (color,))
+                    if limit > 0:
+                        for _ in range(limit):
+                            self.conn.execute("INSERT INTO teams (colors) VALUES (?)", (color,))
             teams = self.get_team_stats()
 
-        # Создаем временную структуру для отслеживания тегов команд
         team_tags = {team["id"]: set(self.get_team_tags(team["id"])) for team in teams}
 
         for user in users:
             user_tags = set(user["tags"])
-            username = user.get("username", "")
 
-            # Ищем команду с местом и без пересечения тегов
+            # 1. Ищем команду без пересечений
             found_team = None
             for team in teams:
                 if team["members"] >= max_team_size:
@@ -109,49 +109,51 @@ class TeamDistributor:
                     found_team = team
                     break
 
-            # Если не нашли подходящую, берем команду с минимальным количеством участников
+            # 2. Если не нашли — ищем команду с минимальным пересечением тегов
             if not found_team:
-                found_team = min(teams, key=lambda x: x["members"])
+                min_intersection = float('inf')
+                for team in teams:
+                    if team["members"] >= max_team_size:
+                        continue
 
-                # Если команда переполнена, пытаемся создать новую того же цвета
-                if found_team["members"] >= max_team_size:
-                    color = found_team["color"]
-                    current_count = self.get_color_team_count(color)
-                    limit = self.color_limits.get(color, 0)
+                    intersection_size = len(team_tags[team["id"]].intersection(user_tags))
+                    if intersection_size < min_intersection:
+                        min_intersection = intersection_size
+                        found_team = team
 
-                    if current_count < limit:
-                        with self.conn:
-                            self.conn.execute("INSERT INTO teams (colors) VALUES (?)", (color,))
-                            new_team_id = self.conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                # 3. Если все команды переполнены — создаем новую (если можно)
+                if not found_team:
+                    found_team = min(teams, key=lambda x: x["members"])
 
-                        # Обновляем структуры данных
-                        new_team = {"id": new_team_id, "color": color, "members": 0}
-                        teams.append(new_team)
-                        team_tags[new_team_id] = set()
-                        found_team = new_team
+                    if found_team["members"] >= max_team_size:
+                        color = found_team["color"]
+                        current_count = sum(1 for t in teams if t["color"] == color)
+                        if current_count < self.color_limits.get(color, 0):
+                            with self.conn:
+                                self.conn.execute("INSERT INTO teams (colors) VALUES (?)", (color,))
+                                new_team_id = self.conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                            new_team = {"id": new_team_id, "color": color, "members": 0}
+                            teams.append(new_team)
+                            team_tags[new_team_id] = set()
+                            found_team = new_team
 
-            # Проверяем реальное пересечение тегов
-            actual_conflict = not team_tags[found_team["id"]].isdisjoint(user_tags)
+            # Проверяем, есть ли пересечения (для логов)
+            has_conflict = bool(team_tags[found_team["id"]]) and not team_tags[found_team["id"]].isdisjoint(user_tags)
 
-            # Обновляем данные пользователя
+            # Обновляем данные
             with self.conn:
                 self.conn.execute(
                     "UPDATE users SET team_id = ? WHERE user_id = ?",
                     (found_team["id"], user["user_id"])
                 )
 
-            # Обновляем теги команды
             team_tags[found_team["id"]].update(user_tags)
             found_team["members"] += 1
 
-            # Форматируем вывод
-            tags_str = str(list(user_tags)).replace("'", "")
-            if actual_conflict:
-                print(
-                    f"{user['user_id']} | {username} | {tags_str} | ⚠️ добавлен в команду с пересечениями #{found_team['id']} ({found_team['color']})")
-            else:
-                print(
-                    f"{user['user_id']} | {username} | {tags_str} | команда #{found_team['id']} ({found_team['color']})")
+            # Логируем (⚠️ только если есть реальные пересечения)
+            status = "⚠️ пересечение тегов" if has_conflict else ""
+            print(
+                f"{user['user_id']} | {user.get('username', '')} | {user['tags']} | команда #{found_team['id']} ({found_team['color']}) {status}")
 
     def clear_all_teams(self):
         """Удаляет все команды и обнуляет team_id у всех пользователей"""
@@ -238,9 +240,10 @@ class TestTeamDistributor:
             teams = []
             team_id = 1
             for color, limit in self.color_limits.items():
-                for _ in range(limit):
-                    teams.append({"id": team_id, "color": color, "members": 0, "tags": set()})
-                    team_id += 1
+                if limit > 0:
+                    for _ in range(limit):
+                        teams.append({"id": team_id, "color": color, "members": 0, "tags": set()})
+                        team_id += 1
 
         simulated_teams = [team.copy() for team in teams]
         for team in simulated_teams:
@@ -251,39 +254,66 @@ class TestTeamDistributor:
         for user in users:
             user_tags = set(user["tags"])
 
-            # Ищем первую команду с местом и без пересечений
+            # 1. Ищем команду без пересечений
             found_team = None
             for team in simulated_teams:
-                if team["members"] < max_team_size and team["tags"].isdisjoint(user_tags):
+                if team["members"] >= max_team_size:
+                    continue
+                if team["tags"].isdisjoint(user_tags):
                     found_team = team
                     break
 
+            # 2. Если не нашли — ищем команду с минимальным пересечением
             if not found_team:
-                # Если не нашли подходящую, берем команду с минимальным количеством участников
-                found_team = min(simulated_teams, key=lambda x: x["members"])
-                # Можно добавить предупреждение, что пересечения есть
-                output.append(
-                    f"{user['user_id']} | {user['username']} | {user['tags']} | ⚠️ добавлен в команду с пересечениями #{found_team['id']} ({found_team['color']})")
-            else:
-                output.append(
-                    f"{user['user_id']} | {user['username']} {user['tags']} | команда #{found_team['id']} ({found_team['color']})")
+                min_intersection = float('inf')
+                for team in simulated_teams:
+                    if team["members"] >= max_team_size:
+                        continue
 
-            # Добавляем пользователя в команду
+                    intersection_size = len(team["tags"].intersection(user_tags))
+                    if intersection_size < min_intersection:
+                        min_intersection = intersection_size
+                        found_team = team
+
+            # 3. Если все команды переполнены — создаем новую (если можно)
+            if found_team["members"] >= max_team_size:
+                color = found_team["color"]
+                current_count = sum(1 for t in simulated_teams if t["color"] == color)
+                limit = self.color_limits.get(color, 0)
+
+                if current_count < limit:
+                    new_team_id = max(t["id"] for t in simulated_teams) + 1 if simulated_teams else 1
+                    new_team = {
+                        "id": new_team_id,
+                        "color": color,
+                        "members": 0,
+                        "tags": set()
+                    }
+                    simulated_teams.append(new_team)
+                    found_team = new_team
+
+            # Логируем результат
+            has_conflict = bool(found_team["tags"]) and not found_team["tags"].isdisjoint(user_tags)
+            status = "⚠️ пересечение тегов" if has_conflict else ""
+            output.append(
+                f"{user['user_id']} | {user['username']} | {user['tags']} | "
+                f"команда #{found_team['id']} ({found_team['color']}) {status}"
+            )
+
             found_team["members"] += 1
             found_team["tags"].update(user_tags)
 
         return output
 
-
 if __name__ == "__main__":
     with TestTeamDistributor() as distributor:
         # distributor.clear_all_teams()
         distributor.setup_colors({
-            "red": 0,
-            "blue": 1,
-            "green": 1
+            "Розовые": 5,
+            "Жёлтые": 18,
+            "Зелёные": 13,
+            "Белые": 9,
         })
-
-        result = distributor.simulate_distribution(max_team_size=2)
+        result = distributor.simulate_distribution(max_team_size=10)
         for line in result:
             print(line)

@@ -95,6 +95,16 @@ async def set_relevance_true_by_user_id(user_id: int):
         )
         await db.commit()
 
+async def activate_all_users():
+    async with aiosqlite.connect("main.db") as db:
+        await db.execute("UPDATE users SET relevance = 1")
+        await db.commit()
+
+async def deactivate_all_users():
+    async with aiosqlite.connect("main.db") as db:
+        await db.execute("UPDATE users SET relevance = 0")
+        await db.commit()
+
 
 async def get_relevant_users_without_tags():
     async with aiosqlite.connect(DB_PATH) as db:

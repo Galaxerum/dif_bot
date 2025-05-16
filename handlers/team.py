@@ -43,7 +43,7 @@ async def generate_teams(message: types.Message):
             distributor.setup_colors({
                 "Розовые": 5,
                 "Жёлтые": 18,
-                "Зелёные": 1,
+                "Зелёные": 13,
                 "Белые": 9,
             })
             distributor.distribute_users(max_team_size=10)

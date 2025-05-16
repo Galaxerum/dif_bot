@@ -1,24 +1,57 @@
 from aiogram import types, Dispatcher
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters import BoundFilter
 from app.config import bot
 from db.admin import get_admin_user_ids
 from db.admin import get_relevant_users_with_tags
-from db.users import get_relevant_users_without_tags
+from db.users import get_relevant_users_without_tags, activate_all_users, deactivate_all_users
 from db.tags import add_tags
 from aiogram.utils.markdown import code, escape_md
 from services.gemini_api import generate_text
 import secrets
 import asyncio
-
 import json
 from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-# Загрузка переменных окружения
+
 load_dotenv()
 SPECIAL_ADMIN_CODE = os.getenv("SPECIAL_ADMIN_CODE")
+
+
+class IsAdminFilter(BoundFilter):
+    key = 'is_admin'
+
+    def __init__(self, is_admin):
+        self.is_admin = is_admin
+
+    async def check(self, message: types.Message):
+        admin_ids = await get_admin_user_ids()
+        return message.from_user.id in admin_ids
+
+
+def register_filters(dp: Dispatcher):
+    dp.filters_factory.bind(IsAdminFilter)
+
+
+async def activate_all(message: types.Message):
+    if message.from_user.id not in await get_admin_user_ids():
+        return
+    await activate_all_users()
+
+    await message.answer("✅ Все пользователи активированы (relevance = 1)")
+
+
+async def deactivate_all(message: types.Message):
+    if message.from_user.id not in await get_admin_user_ids():
+        return
+
+    await deactivate_all_users()
+
+    await message.answer("✅ Все пользователи деактивированы (relevance = 0)")
+
 
 def load_known_tags():
     if not os.path.exists("known_tags.json"):
@@ -210,7 +243,9 @@ async def show_admin_commands(message: types.Message):
         ("/get_admin_link", "Сгенерировать ссылку для назначения админа"),
         ("/generate_tags", "Сгенерировать теги для участников без тегов"),
         ("/generate_teams", "Сгенерировать команды"),
-        ("/clear_teams", "Удаление и очистка состава команд")
+        ("/clear_teams", "Удаление и очистка состава команд"),
+        ("/activate_all", "Активирует всех пользователей (relevance = 1)"),
+        ("/deactivate_all", "Деактивирует всех пользователей (relevance = 0)")
     ]
 
     response = "📝 <b>Доступные команды для админов:</b>\n\n"
@@ -220,9 +255,12 @@ async def show_admin_commands(message: types.Message):
 
 
 def register_handlers(dp: Dispatcher):
-    dp.register_message_handler(handle_admin, commands=["get_users"], state="*")
-    dp.register_message_handler(generate_link, commands=["get_participant"])
-    dp.register_message_handler(generate_admin_link, commands=["get_admin_link"])
-    dp.register_message_handler(show_admin_commands, commands=["admin_help"])
-    dp.register_message_handler(process_users_without_tags, commands=["generate_tags"])
+    register_filters(dp)
+    dp.register_message_handler(handle_admin, commands=["get_users"], state="*", is_admin=True)
+    dp.register_message_handler(generate_link, commands=["get_participant"], is_admin=True)
+    dp.register_message_handler(generate_admin_link, commands=["get_admin_link"], is_admin=True)
+    dp.register_message_handler(show_admin_commands, commands=["admin_help"], is_admin=True)
+    dp.register_message_handler(process_users_without_tags, commands=["generate_tags"], is_admin=True)
     dp.register_callback_query_handler(refresh_relevant_users, text="refresh_relevant_users", state="*")
+    dp.register_message_handler(activate_all, commands=["activate_all"], is_admin=True)
+    dp.register_message_handler(deactivate_all, commands=["deactivate_all"], is_admin=True)
