@@ -41,12 +41,12 @@ async def generate_teams(message: types.Message):
     try:
         with TeamDistributor() as distributor:
             distributor.setup_colors({
-                "Розовые": 5,
-                "Жёлтые": 18,
-                "Зелёные": 13,
-                "Белые": 9,
+                "Розовые": 1,
+                "Жёлтые": 0,
+                "Зелёные": 0,
+                "Белые": 0,
             })
-            distributor.distribute_users(max_team_size=10)
+            distributor.distribute_users(max_team_size=2)
 
         await send_team_notifications()
         await message.answer("✅ Команды успешно сформированы и уведомления разосланы!")
