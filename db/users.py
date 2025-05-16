@@ -80,3 +80,23 @@ async def update_user_portfolio(user_id: int, portfolio: str):
             await db.commit()
     except Exception as e:
         print(f"Error updating user portfolio {user_id}: {e}")
+
+
+async def set_relevance_true_by_user_id(user_id: int):
+    async with aiosqlite.connect("main.db") as db:
+        await db.execute(
+            "UPDATE users SET relevance = 1 WHERE user_id = ?", (user_id,)
+        )
+        await db.commit()
+
+
+async def get_relevant_users_without_tags():
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("""
+            SELECT u.id, u.user_id, u.username, u.portfolio, u.team_id 
+            FROM users u
+            LEFT JOIN tags t ON u.user_id = t.user_id
+            WHERE u.relevance = 1 
+            AND (t.user_id IS NULL OR json_array_length(t.tag) = 0)
+        """)
+        return await cursor.fetchall() or []

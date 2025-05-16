@@ -11,7 +11,7 @@ TABLES = {
             username TEXT,
             portfolio TEXT,
             team_id INTEGER,
-            relevance
+            relevance BOOL
         );
     """,
     "tags": """
@@ -26,6 +26,12 @@ TABLES = {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );   
+    """,
+    "admin": """
+        CREATE TABLE IF NOT EXISTS admin (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER UNIQUE
         );
     """
 }
