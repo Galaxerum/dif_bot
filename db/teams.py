@@ -334,7 +334,7 @@ class TestTeamDistributor:
 if __name__ == "__main__":
     print(DB_PATH)
     with TestTeamDistributor() as distributor:
-        distributor.num_teams = 5  # кол-во команд
-        result = distributor.simulate_distribution(max_team_size=6)
+        distributor.num_teams = 5
+        result = distributor.simulate_distribution(max_team_size=5)
         for line in result:
             print(line)
