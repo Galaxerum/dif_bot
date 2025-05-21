@@ -97,7 +97,11 @@ async def set_relevance_true_by_user_id(user_id: int):
 
 async def activate_all_users():
     async with aiosqlite.connect("main.db") as db:
-        await db.execute("UPDATE users SET relevance = 1")
+        await db.execute("""
+            UPDATE users
+            SET relevance = 1
+            WHERE portfolio IS NOT NULL AND TRIM(portfolio) != ''
+        """)
         await db.commit()
 
 async def deactivate_all_users():

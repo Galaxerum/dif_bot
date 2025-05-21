@@ -119,7 +119,6 @@ async def team_info(message: types.Message):
 
         team_id = user_team["team_id"]
 
-        # Теперь находим ВСЕХ участников этой команды
         cursor = await conn.execute("""
             SELECT user_id FROM users 
             WHERE team_id = ? AND relevance = 1

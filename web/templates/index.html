@@ -1,1 +1,140 @@
-<html><body><h1>Admin Panel</h1></body></html>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Панель управления</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+
+        select {
+            padding: 10px;
+            font-size: 16px;
+        }
+
+        h1 {
+            margin-top: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 400px;
+            margin-top: 10px;
+            font-family: monospace;
+        }
+
+        .output {
+            white-space: pre-wrap;
+            background-color: #f5f5f5;
+            padding: 10px;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+        }
+
+        .team-box {
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .team-box h3 {
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Панель управления</h1>
+
+    <label for="page-select">Выберите раздел:</label>
+    <select id="page-select">
+        <option value="logs">Логи</option>
+        <option value="commands">Админские команды</option>
+        <option value="distribution">Распределение команд</option>
+        <option value="other_page">Другая страница</option>
+    </select>
+
+    <h2 id="page-title">Логи (последние 100 строк):</h2>
+    <div id="page-content">
+        <textarea readonly>{{ logs }}</textarea>
+    </div>
+
+    <script>
+        const pageSelect = document.getElementById("page-select");
+        const pageTitle = document.getElementById("page-title");
+        const pageContent = document.getElementById("page-content");
+
+        const commandsHtml = `
+            <form id="command-form">
+                <label for="command">Введите команду:</label>
+                <input type="text" id="command" name="command" required>
+                <button type="submit">Выполнить</button>
+            </form>
+            <div id="output" class="output"></div>
+        `;
+
+        const otherPageHtml = `
+            <p>Это другая страница с произвольным содержимым.</p>
+        `;
+
+        function renderDistribution(data) {
+            const container = document.createElement("div");
+
+            data.forEach((team, index) => {
+                const teamBox = document.createElement("div");
+                teamBox.className = "team-box";
+                teamBox.innerHTML = `<h3>Команда ${index + 1}</h3><ul>` +
+                    team.map(member => `<li>${member.name} — <strong>${member.tags.join(', ')}</strong></li>`).join('') +
+                    "</ul>";
+                container.appendChild(teamBox);
+            });
+
+            const output = document.getElementById("output");
+            output.innerHTML = "";
+            output.appendChild(container);
+        }
+
+        pageSelect.addEventListener("change", () => {
+            const val = pageSelect.value;
+
+            if (val === "logs") {
+                pageTitle.textContent = "Логи (последние 100 строк):";
+                pageContent.innerHTML = `<textarea readonly>{{ logs }}</textarea>`;
+            } else if (val === "commands") {
+                pageTitle.textContent = "Админские команды";
+                pageContent.innerHTML = commandsHtml;
+
+                const form = document.getElementById("command-form");
+                const output = document.getElementById("output");
+
+                form.addEventListener("submit", async (e) => {
+                    e.preventDefault();
+                    output.textContent = "Выполняется команда...";
+
+                    const formData = new FormData(form);
+                    const response = await fetch("/run_command", {
+                        method: "POST",
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const err = await response.json();
+                        output.textContent = "Ошибка: " + (err.error || "Неизвестная ошибка");
+                        return;
+                    }
+
+                    const data = await response.json();
+                    renderDistribution(data);
+                });
+            } else if (val === "distribution") {
+                window.location.href = "test-team.html";
+            } else if (val === "other_page") {
+                pageTitle.textContent = "Другая страница";
+                pageContent.innerHTML = otherPageHtml;
+            }
+        });
+    </script>
+</body>
+</html>

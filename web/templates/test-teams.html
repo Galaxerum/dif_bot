@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Распределение по командам</title>
+</head>
+<body>
+    <h1>Команды</h1>
+    <form method="get" action="/test-teams">
+        <button type="submit">🔄 Обновить</button>
+    </form>
+
+    {% for team in teams %}
+        <h2>Команда {{ team.team_num }} ({{ team.members_count }} человек)</h2>
+        {% if team.conflict_count > 0 %}
+            <p>⚠️ Конфликтов: {{ team.conflict_count }}</p>
+        {% endif %}
+        <ul>
+            {% for member in team.members %}
+                <li>
+                    <strong>{{ member.name }}</strong> — {{ member.tags }}<br/>
+                    {% if member.conflicts %}
+                        ❗ Конфликт: {{ member.conflicts | join(', ') }}
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    {% endfor %}
+
+    <h2>Статистика</h2>
+    <p>Всего конфликтов: {{ overall_stats.total_conflicts }}</p>
+    <p>Чаще всего конфликтуют по тегу: {{ overall_stats.most_conflict_tag }}</p>
+    <p>Топ-3 конфликтов:</p>
+    <ul>
+        {% for tag, count in overall_stats.top3_conflicts %}
+            <li>{{ tag }} — {{ count }}</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
