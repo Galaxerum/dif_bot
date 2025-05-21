@@ -8,7 +8,7 @@ from db.admin import get_relevant_users_with_tags
 from db.users import get_relevant_users_without_tags, activate_all_users, deactivate_all_users
 from db.tags import add_tags
 from aiogram.utils.markdown import code, escape_md
-from services.gemini_api import generate_text
+from services.local_AI import generate_text
 import secrets
 import asyncio
 import json
@@ -245,7 +245,8 @@ async def show_admin_commands(message: types.Message):
         ("/generate_teams", "Сгенерировать команды"),
         ("/clear_teams", "Удаление и очистка состава команд"),
         ("/activate_all", "Активирует всех пользователей (relevance = 1)"),
-        ("/deactivate_all", "Деактивирует всех пользователей (relevance = 0)")
+        ("/deactivate_all", "Деактивирует всех пользователей (relevance = 0)"),
+        ("/notify_empty_portfolio", "разослать сообщение о необходимости заполнить портфолио")
     ]
 
     response = "📝 <b>Доступные команды для админов:</b>\n\n"

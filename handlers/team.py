@@ -163,6 +163,81 @@ async def clear_teams(message: types.Message):
     await message.answer("✅ Команды очищены!")
 
 
+async def notify_empty_portfolio(message: types.Message):
+    if message.from_user.id not in await get_admin_user_ids():
+        return
+
+    async with aiosqlite.connect("main.db") as conn:
+        conn.row_factory = aiosqlite.Row
+        cursor = await conn.execute("""
+            SELECT user_id FROM users 
+            WHERE portfolio IS NULL OR portfolio = ''
+        """)
+
+        users_with_empty_portfolio = await cursor.fetchall()
+
+        if not users_with_empty_portfolio:
+            await message.answer("✅ У всех активных пользователей заполнено портфолио!")
+            return
+
+        total_count = len(users_with_empty_portfolio)
+        progress_message = await message.answer(
+            f"🔔 Найдено {total_count} пользователей с пустым портфолио\n\n"
+            f"🔄 Начинаю рассылку...\n"
+            f"0/{total_count} (0%)"
+        )
+
+        success = 0
+        failed = 0
+        text = (
+            "🔔 Уведомление от системы нетворкинга\n\n"
+            "Ваше портфолио не заполнено. Это ограничивает ваши возможности участия:\n\n"
+            "• Вы не сможете быть распределены в команду\n"
+            "• Другие участники не увидят ваш профиль\n"
+            "• Доступ к нетворкинг-сессиям будет ограничен\n\n"
+            "📌 <b>Пожалуйста, заполните портфолио:</b>\n"
+            "1) Нажмите кнопку «Создать портфолио»\n"
+            "2) Укажите профессиональный опыт\n"
+            "3) Добавьте ключевые компетенции\n"
+            "4) Опишите цели для нетворкинга\n\n"
+            "Это займёт 2 минуты, но откроет доступ ко всем возможностям системы. "
+            "Наша платформа создана для осмысленных профессиональных связей - "
+            "дайте другим участникам возможность узнать о вас.\n\n"
+            "Спасибо за понимание!"
+        )
+
+        for index, user in enumerate(users_with_empty_portfolio, 1):
+            try:
+                await bot.send_message(
+                    chat_id=user["user_id"],
+                    text=text,
+                    parse_mode="HTML"
+                )
+                success += 1
+            except Exception as e:
+                print(f"Ошибка отправки пользователю {user['user_id']}: {str(e)}")
+                failed += 1
+
+            # Обновляем прогресс после каждого пользователя
+            progress = int((index / total_count) * 100)
+            await progress_message.edit_text(
+                f"🔔 Найдено {total_count} пользователей\n\n"
+                f"🔄 Рассылка...\n"
+                f"{index}/{total_count} ({progress}%)\n\n"
+                f"✓ Успешно: {success}\n"
+                f"✕ Ошибки: {failed}"
+            )
+
+            await asyncio.sleep(0.3)  # Оптимальная задержка
+
+        await progress_message.edit_text(
+            f"✅ Рассылка завершена!\n\n"
+            f"• Всего пользователей: {total_count}\n"
+            f"• Успешно отправлено: {success}\n"
+            f"• Не удалось отправить: {failed}\n\n"
+        )
+
+
 def register_handlers(dp: Dispatcher):
     register_filters(dp)
 
@@ -179,4 +254,9 @@ def register_handlers(dp: Dispatcher):
     dp.register_message_handler(
         team_info,
         text="👥 Моя команда"
+    )
+    dp.register_message_handler(
+        notify_empty_portfolio,
+        commands=["notify_empty_portfolio"],
+        is_admin=True
     )

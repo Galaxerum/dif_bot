@@ -1,11 +1,10 @@
-from typing import TextIO
 from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types import ReplyKeyboardRemove
 from db.users import get_user, update_user_portfolio, get_user_portfolio, delete_user_portfolio, update_user_username
-from db.tags import add_tags, get_user_tags
-from services.gemini_api import generate_text
+from db.tags import add_tags
+from services.local_AI import generate_text
 import asyncio
 from keyboards import reply_keyboard
 import json
