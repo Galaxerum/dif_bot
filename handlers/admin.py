@@ -8,7 +8,7 @@ from db.admin import get_relevant_users_with_tags
 from db.users import get_relevant_users_without_tags, activate_all_users, deactivate_all_users
 from db.tags import add_tags
 from aiogram.utils.markdown import escape_md
-from services.gemini_api import generate_text
+from services.local_AI import generate_text
 import secrets
 import asyncio
 import json
@@ -46,6 +46,7 @@ async def activate_all(message: types.Message):
     await activate_all_users()
 
     await message.answer("✅ Все пользователи активированы (relevance = 1)")
+    logger.info("✅ Пользователи с портфолио активированы (relevance = 1)")
 
 
 async def deactivate_all(message: types.Message):
@@ -55,6 +56,7 @@ async def deactivate_all(message: types.Message):
     await deactivate_all_users()
 
     await message.answer("✅ Все пользователи деактивированы (relevance = 0)")
+    logger.info("✅ Все пользователи деактивированы (relevance = 0)")
 
 
 def load_known_tags():
@@ -201,7 +203,8 @@ async def process_users_without_tags(message: types.Message):
         users = await get_relevant_users_without_tags()
 
         if not users:
-            await message.answer("🔍 Нет пользователей без тегов для обработки")
+            await message.answer("🔍 Нет пользователей для обработки")
+            logger.info("🔍 Нет пользователей для обработки")
             return
 
         status_msg = await message.answer(f"🔧 Начинаю обработку {len(users)} пользователей...")
@@ -213,6 +216,7 @@ async def process_users_without_tags(message: types.Message):
 
             if not portfolio_text:
                 await status_msg.edit_text(f"{status_msg.text}\n⏭ Пропускаю {user_id} - нет портфолио")
+                await asyncio.sleep(0.3)
                 continue
 
             await status_msg.edit_text(f"{status_msg.text}\n🔄 Обрабатываю пользователя {user_id}...")
@@ -220,15 +224,19 @@ async def process_users_without_tags(message: types.Message):
 
             if not is_meaningful or not tags:
                 await status_msg.edit_text(f"{status_msg.text}\n❌ Портфолио {user_id} не содержит полезной информации")
+                logger.warning(f"❌ Портфолио {user_id} не содержит полезной информации")
+                await asyncio.sleep(0.3)
                 continue
 
             await add_tags(user_id, tags)
             update_known_tags(tags)
             await status_msg.edit_text(f"{status_msg.text}\n✅ Добавлены теги для {user_id}: {', '.join(tags)}")
+            logger.info(f"✅ Добавлены теги для {user_id}: {', '.join(tags)}")
             processed += 1
             await asyncio.sleep(1)
 
-        await status_msg.edit_text(f"{status_msg.text}\n🎉 Обработка завершена! Обработано: {processed}/{len(users)}")
+        await status_msg.edit_text(f"🎉 Обработка завершена! Обработано: {processed}/{len(users)}")
+        logger.info("Генерация новых тегов завершена")
 
     except Exception as e:
         logger.error(f"⚠️ Ошибка: {str(e)}")

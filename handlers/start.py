@@ -58,7 +58,6 @@ async def start_handler(message: types.Message):
         try:
             token = args.split("_")[1]
 
-            # Проверяем токен (в этом примере - в памяти, лучше использовать БД)
             if await is_valid_token(token):
                 await set_relevance_true_by_user_id(user_id)
                 await message.answer("✅ Вы успешно активированы!")
