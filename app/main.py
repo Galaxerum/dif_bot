@@ -1,7 +1,7 @@
 import asyncio
 import uvicorn
 from aiogram.utils import executor
-from app.config import bot, dp
+from app.config import dp
 from handlers.start import register_handlers as register_start_handler
 from handlers.portfolio import register_handlers as register_portfolio_handler
 from handlers.team import register_handlers as register_team_handler
