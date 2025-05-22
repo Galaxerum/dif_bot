@@ -2,6 +2,10 @@ import aiosqlite
 from db.db import DB_PATH
 from db.models import User
 from typing import Optional, List
+from app.loger_setup import get_logger
+
+
+logger = get_logger(__name__, level="INFO")
 
 
 async def update_user_username(user_id: int, username: str):
@@ -13,17 +17,15 @@ async def update_user_username(user_id: int, username: str):
 async def add_user(user: User):
     try:
         async with aiosqlite.connect(DB_PATH) as db:
-            # Преобразуем объект User в словарь
-            user_data = user.dict()
+            user_data = user.model_dump()
 
-            # Теперь можно передавать данные из словаря
             await db.execute(
                 "INSERT OR IGNORE INTO users (user_id, username, portfolio, team_id) VALUES (?, ?, ?, ?)",
                 (user_data['user_id'], user_data['username'], user_data['portfolio'], user_data['team_id'])
             )
             await db.commit()
     except Exception as e:
-        print(f"Error adding user: {e}")
+        logger.error(f"Error adding user: {e}")
 
 
 async def get_user(user_id: int) -> Optional[User]:
@@ -34,7 +36,7 @@ async def get_user(user_id: int) -> Optional[User]:
             row = await cursor.fetchone()
             return User(**dict(zip([column[0] for column in cursor.description], row))) if row else None
     except Exception as e:
-        print(f"Error getting user {user_id}: {e}")
+        logger.error(f"Error getting user {user_id}: {e}")
         return None
 
 
@@ -44,7 +46,7 @@ async def delete_user_portfolio(user_id: int):
             await db.execute("UPDATE users SET portfolio = '' WHERE user_id = ?", (user_id,))
             await db.commit()
     except Exception as e:
-        print(f"Error deleting portfolio for user {user_id}: {e}")
+        logger.error(f"Error deleting portfolio for user {user_id}: {e}")
 
 
 async def get_user_portfolio(user_id: int) -> Optional[User]:
@@ -55,7 +57,7 @@ async def get_user_portfolio(user_id: int) -> Optional[User]:
             row = await cursor.fetchone()
             return row[0] if row else None
     except Exception as e:
-        print(f"Error getting user {user_id}: {e}")
+        logger.error(f"Error getting user {user_id}: {e}")
         return None
 
 
@@ -65,7 +67,7 @@ async def update_user_team(user_id: int, team_id: int):
             await db.execute("UPDATE users SET team_id = ? WHERE user_id = ?", (team_id, user_id))
             await db.commit()
     except Exception as e:
-        print(f"Error updating user team {user_id}: {e}")
+        logger.error(f"Error updating user team {user_id}: {e}")
 
 
 async def get_all_users() -> List[User]:
@@ -75,7 +77,7 @@ async def get_all_users() -> List[User]:
             rows = await cursor.fetchall()
             return [User(**dict(zip([column[0] for column in cursor.description], row))) for row in rows]
     except Exception as e:
-        print(f"Error fetching all users: {e}")
+        logger.error(f"Error fetching all users: {e}")
         return []
 
 
@@ -85,7 +87,7 @@ async def update_user_portfolio(user_id: int, portfolio: str):
             await db.execute("UPDATE users SET portfolio = ? WHERE user_id = ?", (portfolio, user_id))
             await db.commit()
     except Exception as e:
-        print(f"Error updating user portfolio {user_id}: {e}")
+        logger.error(f"Error updating user portfolio {user_id}: {e}")
 
 
 async def set_relevance_true_by_user_id(user_id: int):

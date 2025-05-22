@@ -6,6 +6,10 @@ from db.admin import get_admin_user_ids
 from app.config import bot
 import aiosqlite
 import asyncio
+from app.loger_setup import get_logger
+
+
+logger = get_logger(__name__, level="INFO")
 
 
 class IsAdminFilter(BoundFilter):
@@ -23,6 +27,7 @@ def register_filters(dp: Dispatcher):
     dp.filters_factory.bind(IsAdminFilter)
 
 
+# noinspection PyBroadException
 async def get_user_display_info(user_id: int) -> str:
     try:
         chat = await bot.get_chat(user_id)
@@ -106,40 +111,27 @@ async def team_info(message: types.Message):
     async with aiosqlite.connect("main.db") as conn:
         conn.row_factory = aiosqlite.Row
 
-        # Сначала находим team_id текущего пользователя
-        cursor = await conn.execute("""
-            SELECT team_id FROM users 
-            WHERE user_id = ? AND relevance = 1
-        """, (user_id,))
-
+        cursor = await conn.execute("SELECT team_id FROM users WHERE user_id = ?", (user_id,))
         user_team = await cursor.fetchone()
-        if not user_team:
+
+        if not user_team or not user_team["team_id"]:
             await message.answer("Вы пока не в команде.")
             return
 
         team_id = user_team["team_id"]
 
-        cursor = await conn.execute("""
-            SELECT user_id FROM users 
-            WHERE team_id = ? AND relevance = 1
-        """, (team_id,))
-
+        cursor = await conn.execute("SELECT user_id FROM users WHERE team_id = ?", (team_id,))
         member_ids = [row["user_id"] for row in await cursor.fetchall()]
 
-        # Получаем информацию о каждом участнике
         members_info = await asyncio.gather(
             *[get_user_display_info(member_id) for member_id in member_ids],
             return_exceptions=True
         )
 
-        # Получаем информацию о самой команде (цвет)
-        cursor = await conn.execute("""
-            SELECT colors FROM teams WHERE id = ?
-        """, (team_id,))
-        team_info = await cursor.fetchone()
-        color = team_info["colors"] if team_info else "Не указан"
+        cursor = await conn.execute("SELECT colors FROM teams WHERE id = ?", (team_id,))
+        team_info_ = await cursor.fetchone()
+        color = team_info_["colors"] if team_info_ else "Не указан"
 
-        # Формируем список участников
         members_list = "\n".join(
             f"- {info}" if not isinstance(info, Exception)
             else f"- [Пользователь {member_id}]"
@@ -215,7 +207,7 @@ async def notify_empty_portfolio(message: types.Message):
                 )
                 success += 1
             except Exception as e:
-                print(f"Ошибка отправки пользователю {user['user_id']}: {str(e)}")
+                logger.warning(f"Ошибка отправки пользователю {user['user_id']}: {str(e)}")
                 failed += 1
 
             # Обновляем прогресс после каждого пользователя

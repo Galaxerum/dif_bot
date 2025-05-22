@@ -7,14 +7,18 @@ from db.admin import get_admin_user_ids
 from db.admin import get_relevant_users_with_tags
 from db.users import get_relevant_users_without_tags, activate_all_users, deactivate_all_users
 from db.tags import add_tags
-from aiogram.utils.markdown import code, escape_md
-from services.local_AI import generate_text
+from aiogram.utils.markdown import escape_md
+from services.gemini_api import generate_text
 import secrets
 import asyncio
 import json
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+from app.loger_setup import get_logger
+
+
+logger = get_logger(__name__, level="INFO")
 
 
 load_dotenv()
@@ -181,17 +185,17 @@ async def _process_portfolio_with_ai(portfolio_text: str) -> tuple[list[str], bo
         return tags, is_meaningful
 
     except Exception as e:
-        print(f"JSON parsing error: {e}")
+        logger.error(f"JSON parsing error: {e}")
         return [], False
 
-async def show_typing(chat_id, bot):
+async def show_typing(chat_id):
     while True:
         await bot.send_chat_action(chat_id, "typing")
         await asyncio.sleep(3)
 
 
 async def process_users_without_tags(message: types.Message):
-    typing_task = asyncio.create_task(show_typing(message.chat.id, message.bot))
+    typing_task = asyncio.create_task(show_typing(message.chat.id))
 
     try:
         users = await get_relevant_users_without_tags()
@@ -227,7 +231,7 @@ async def process_users_without_tags(message: types.Message):
         await status_msg.edit_text(f"{status_msg.text}\n🎉 Обработка завершена! Обработано: {processed}/{len(users)}")
 
     except Exception as e:
-        print(f"⚠️ Ошибка: {str(e)}")
+        logger.error(f"⚠️ Ошибка: {str(e)}")
     finally:
         typing_task.cancel()
 

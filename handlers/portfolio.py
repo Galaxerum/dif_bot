@@ -9,6 +9,10 @@ import asyncio
 from keyboards import reply_keyboard
 import json
 import os
+from app.loger_setup import get_logger
+
+
+logger = get_logger(__name__, level="INFO")
 
 def load_known_tags():
     if not os.path.exists("known_tags.json"):
@@ -146,7 +150,7 @@ async def process_portfolio_text(message: types.Message, state: FSMContext):
 
             update_known_tags(tags)
             await add_tags(user_id, tags)
-            print(f"Tags for user {user_id}: {tags}")
+            logger.info(f"Tags for user {user_id}: {tags}")
 
         await update_user_portfolio(user_id, portfolio_text)
 
@@ -178,7 +182,7 @@ async def process_portfolio_text(message: types.Message, state: FSMContext):
         )
 
     except Exception as e:
-        print(f"⚠️ Произошла ошибка при обработке: {str(e)}")
+        logger.error(f"⚠️ Произошла ошибка при обработке: {str(e)}")
         await state.finish()
     finally:
         typing_task.cancel()
@@ -201,7 +205,7 @@ async def _process_portfolio_with_ai(portfolio_text: str) -> tuple[list[str], bo
         return tags, is_meaningful
 
     except Exception as e:
-        print(f"JSON parsing error: {e}")
+        logger.error(f"JSON parsing error: {e}")
         return [], False
 
 async def confirm_tags_save(message: types.Message, state: FSMContext):

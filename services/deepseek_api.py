@@ -4,6 +4,10 @@ import json
 from dotenv import load_dotenv
 import os
 import sys
+from app.loger_setup import get_logger
+
+
+logger = get_logger(__name__, level="ERROR")
 
 if sys.platform.startswith("win"):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -27,8 +31,8 @@ async def generate_text(text: str) -> str:
 
     async with aiohttp.ClientSession() as session:
         async with session.post(API_URL, json=data, headers=headers) as response:
-            # print(f"[DEBUG] Status: {response.status}")
-            # print(f"[DEBUG] Response Text: {await response.text()}")  # Печать тела ответа для диагностики
+            logger.debug(f"Status: {response.status}")
+            logger.debug(f"Response Text: {await response.text()}")
             if response.status == 200:
                 response_json = await response.json()
                 ai_text = response_json.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -39,7 +43,7 @@ async def generate_text(text: str) -> str:
                         ai_text = "\n".join(lines[1:-1]).strip()
                 return ai_text
             else:
-                return f"Failed to fetch data from API. Status Code: {response.status}"
+                logger.error(f"Failed to fetch data from API. Status Code: {response.status}")
 
 
 async def main():

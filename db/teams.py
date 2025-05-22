@@ -192,9 +192,8 @@ class TeamDistributor:
                 f"команда #{best_team['id']} ({best_team['color']}) {' + '.join(status)}"
             )
 
-        # Выводим все логи
-        for line in output:
-            print(line)
+        for log_line in output:
+            print(log_line)
 
     def clear_all_teams(self):
         """Удаляет все команды и обнуляет team_id у всех пользователей"""
@@ -216,6 +215,7 @@ class TestTeamDistributor:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.conn.close()
 
+    # noinspection PyBroadException
     def get_users_to_distribute(self) -> List[Dict]:
         cur = self.conn.cursor()
         cur.execute("""
@@ -244,7 +244,8 @@ class TestTeamDistributor:
             })
         return users
 
-    def format_user_log(self, user_id, username, tags, conflict_tags):
+    @staticmethod
+    def format_user_log(user_id, username, tags, conflict_tags):
         tags_str = ", ".join(tags)
         if conflict_tags:
             conflicts_str = ", ".join(conflict_tags)
@@ -298,26 +299,26 @@ class TestTeamDistributor:
 
             best_team["members"] += 1
             best_team["tags"].update(user_tags)
-            log = self.format_user_log(user["user_id"], user.get("username", ""), user["tags"], conflicting_tags)
+            log = TestTeamDistributor.format_user_log(user["user_id"], user.get("username", ""), user["tags"], conflicting_tags)
             best_team["logs"].append(log)
 
-        result = []
+        result_team = []
         for team in teams:
-            result.append(
+            result_team.append(
                 f"\n🟢 Команда #{team['id']} ({team['members']} участников, {team['conflict_users']} с конфликтами)")
-            result.extend(f"  {log}" for log in team["logs"])
+            result_team.extend(f"  {log}" for log in team["logs"])
 
             # Статистика по команде
             if team["conflict_tags_counter"]:
                 common_tags = team["conflict_tags_counter"].most_common(3)
                 conflict_tags_summary = ", ".join(f"{tag}({count})" for tag, count in common_tags)
-                result.append(f"  Конфликтные теги в команде: {conflict_tags_summary}")
+                result_team.append(f"  Конфликтные теги в команде: {conflict_tags_summary}")
 
         for log in distribution_log:
-            result.append(log)
+            result_team.append(log)
 
         # Общая статистика конфликтов
-        result.append("\n📊 Общая статистика конфликтов:")
+        result_team.append("\n📊 Общая статистика конфликтов:")
         total_conflicts = sum(conflict_tag_counter.values())
         if total_conflicts:
             most_common = conflict_tag_counter.most_common(3)
@@ -326,9 +327,9 @@ class TestTeamDistributor:
             result.append(f"  Топ-3 конфликтных тегов: {tags_summary}")
             result.append(f"\n  Самый конфликтный тег: '{most_common[0][0]}' с {most_common[0][1]} пересечениями")
         else:
-            result.append("  Конфликтных тегов не обнаружено")
+            result_team.append("  Конфликтных тегов не обнаружено")
 
-        return result
+        return result_team
 
 
 if __name__ == "__main__":

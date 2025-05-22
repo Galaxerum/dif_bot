@@ -8,7 +8,10 @@ from handlers.team import register_handlers as register_team_handler
 from handlers.admin import register_handlers as register_admin_handler
 from app.webhook import app
 from db.db import init_db
+from app.loger_setup import get_logger
 
+
+logger = get_logger(__name__, level="INFO")
 
 async def register_all_handlers():
     register_admin_handler(dp)
@@ -20,7 +23,7 @@ async def register_all_handlers():
 
 async def on_startup(_):
     await init_db()
-    print("База данных подключена")
+    logger.info("База данных подключена")
 
 
 def start_polling():
